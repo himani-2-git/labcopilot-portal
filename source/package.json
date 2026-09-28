@@ -1,0 +1,36 @@
+{
+  "name": "labcopilot",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "scripts": {
+    "db:start": "node scripts/postgres.mjs start",
+    "db:stop": "node scripts/postgres.mjs stop",
+    "db:status": "node scripts/postgres.mjs status",
+    "db:generate": "pnpm --filter @labcopilot/api db:generate",
+    "db:migrate": "pnpm --filter @labcopilot/api db:migrate",
+    "db:seed": "pnpm --filter @labcopilot/api db:seed",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "dev": "pnpm --filter @labcopilot/contracts build && concurrently -k -n api,web \"pnpm --filter @labcopilot/api dev\" \"pnpm --filter @labcopilot/web dev\"",
+    "test:e2e": "node node_modules/@playwright/test/cli.js test",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "setup:local": "node scripts/setup.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.10.1",
+    "concurrently": "9.2.1",
+    "dotenv": "17.2.3",
+    "pg": "8.16.3",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  },
+  "optionalDependencies": {
+    "@embedded-postgres/windows-x64": "18.4.0-beta.17"
+  }
+}

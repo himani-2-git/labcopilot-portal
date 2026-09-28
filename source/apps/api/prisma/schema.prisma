@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  registration_clerk
+  technician
+  qualified_approver
+  administrator
+}
+
+enum CatalogStatus {
+  active
+  inactive
+}
+
+enum OrderPriority {
+  routine
+  urgent
+}
+
+enum OrderStatus {
+  ordered
+  cancelled
+}
+
+enum OrderItemType {
+  test
+  panel
+}
+
+enum SpecimenStatus {
+  ordered
+  collection_pending
+  collected
+  received_accession_pending
+  accepted
+  rejected
+  recollection_required
+}
+
+enum ResultStatus {
+  draft
+  entered
+  validated
+  analytically_ready
+}
+
+enum ResultValueKind {
+  numeric
+  text
+  coded
+}
+
+model Facility {
+  id             String            @id @db.Uuid
+  name           String
+  users          User[]
+  patients       Patient[]
+  orders         LaboratoryOrder[]
+  specimens      Specimen[]
+  accessions     Accession[]
+  specimenEvents SpecimenEvent[]
+  results        AnalyticalResult[]
+}
+
+model User {
+  id                 String            @id @db.Uuid
+  username           String            @unique
+  displayName        String
+  passwordHash       String
+  role               Role
+  facilityId         String            @db.Uuid
+  active             Boolean           @default(true)
+  facility           Facility          @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  sessions           Session[]
+  revisions          PatientRevision[]
+  auditEvents        AuditEvent[]
+  receipts           CommandReceipt[]
+  orderedOrders      LaboratoryOrder[] @relation("OrderRequester")
+  collectedSpecimens Specimen[]        @relation("SpecimenCollector")
+  receivedSpecimens  Specimen[]        @relation("SpecimenReceiver")
+  accessionsReceived Accession[]
+  specimenEvents     SpecimenEvent[]
+  resultRevisions    ResultRevision[]
+
+  @@index([facilityId])
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  csrfToken String
+  userId    String   @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Patient {
+  id           String            @id @db.Uuid
+  facilityId   String            @db.Uuid
+  version      Int
+  demographics Json
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+  facility     Facility          @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  revisions    PatientRevision[]
+  orders       LaboratoryOrder[]
+  specimens    Specimen[]
+  results      AnalyticalResult[]
+
+  @@index([facilityId, updatedAt])
+}
+
+model LaboratoryTest {
+  id                String                @id @db.Uuid
+  code              String                @unique
+  name              String
+  specimenType      String
+  unit              String?
+  referenceMetadata String?
+  loincCode         String?
+  status            CatalogStatus         @default(active)
+  orderItems        LaboratoryOrderItem[]
+  panelItems        PanelItem[]
+  analyticalPolicy  Json?
+  results           AnalyticalResult[]
+  orderedTests      LaboratoryOrderTest[]
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @db.Timestamptz(3)
+
+  @@index([status, specimenType])
+}
+
+model LaboratoryPanel {
+  id          String                @id @db.Uuid
+  code        String                @unique
+  name        String
+  description String?
+  status      CatalogStatus         @default(active)
+  items       PanelItem[]
+  orderItems  LaboratoryOrderItem[]
+  createdAt   DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime              @updatedAt @db.Timestamptz(3)
+
+  @@index([status])
+}
+
+model PanelItem {
+  id        String          @id @db.Uuid
+  panelId   String          @db.Uuid
+  testId    String          @db.Uuid
+  sortOrder Int
+  panel     LaboratoryPanel @relation(fields: [panelId], references: [id], onDelete: Restrict)
+  test      LaboratoryTest  @relation(fields: [testId], references: [id], onDelete: Restrict)
+
+  @@unique([panelId, testId])
+  @@index([panelId, sortOrder])
+}
+
+model LaboratoryOrder {
+  id          String                @id @db.Uuid
+  facilityId  String                @db.Uuid
+  patientId   String                @db.Uuid
+  orderedById String                @db.Uuid
+  version     Int
+  status      OrderStatus           @default(ordered)
+  priority    OrderPriority         @default(routine)
+  note        String?
+  orderedAt   DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime              @updatedAt @db.Timestamptz(3)
+  facility    Facility              @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  patient     Patient               @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  orderedBy   User                  @relation("OrderRequester", fields: [orderedById], references: [id], onDelete: Restrict)
+  items       LaboratoryOrderItem[]
+  specimens   Specimen[]
+  results     AnalyticalResult[]
+
+  @@index([facilityId, orderedAt])
+  @@index([patientId, orderedAt])
+}
+
+model LaboratoryOrderItem {
+  id       String           @id @db.Uuid
+  orderId  String           @db.Uuid
+  itemType OrderItemType
+  testId   String?          @db.Uuid
+  panelId  String?          @db.Uuid
+  catalogCode String?
+  catalogName String?
+  order    LaboratoryOrder  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  test     LaboratoryTest?  @relation(fields: [testId], references: [id], onDelete: Restrict)
+  panel    LaboratoryPanel? @relation(fields: [panelId], references: [id], onDelete: Restrict)
+  results  AnalyticalResult[]
+  orderedTests LaboratoryOrderTest[]
+
+  @@index([orderId])
+}
+
+// Frozen at order creation. Catalog and panel edits cannot change an order's
+// test membership or its synthetic result policy after it was placed.
+model LaboratoryOrderTest {
+  id                String              @id @db.Uuid
+  orderItemId       String              @db.Uuid
+  testId            String              @db.Uuid
+  sortOrder         Int
+  testCode          String
+  testName          String
+  specimenType      String
+  unit              String?
+  referenceMetadata String?
+  loincCode         String?
+  analyticalPolicy  Json?
+  orderItem         LaboratoryOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  test              LaboratoryTest      @relation(fields: [testId], references: [id], onDelete: Restrict)
+
+  @@unique([orderItemId, testId])
+  @@index([orderItemId, sortOrder])
+}
+
+model Specimen {
+  id                 String          @id @db.Uuid
+  facilityId         String          @db.Uuid
+  patientId          String          @db.Uuid
+  orderId            String          @db.Uuid
+  attemptNumber      Int             @default(1)
+  version            Int
+  specimenType       String
+  status             SpecimenStatus  @default(ordered)
+  barcodeValue       String          @unique
+  collectedAt        DateTime?       @db.Timestamptz(3)
+  collectedById      String?         @db.Uuid
+  receivedAt         DateTime?       @db.Timestamptz(3)
+  receivedById       String?         @db.Uuid
+  notes              String?
+  rejectionReason    String?
+  recollectionReason String?
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
+  facility           Facility        @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  patient            Patient         @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  order              LaboratoryOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  collectedBy        User?           @relation("SpecimenCollector", fields: [collectedById], references: [id], onDelete: Restrict)
+  receivedBy         User?           @relation("SpecimenReceiver", fields: [receivedById], references: [id], onDelete: Restrict)
+  accessions         Accession[]
+  events             SpecimenEvent[]
+  results            AnalyticalResult[]
+
+  @@index([facilityId, status, updatedAt])
+  @@index([patientId, updatedAt])
+  @@unique([orderId, attemptNumber])
+}
+
+model Accession {
+  id              String    @id @db.Uuid
+  facilityId      String    @db.Uuid
+  identifier      String    @unique
+  barcodeValue    String    @unique
+  specimenId      String    @db.Uuid
+  orderId         String    @db.Uuid
+  patientId       String    @db.Uuid
+  receivedAt      DateTime? @db.Timestamptz(3)
+  receivedById    String?   @db.Uuid
+  decision        String?
+  rejectionReason String?
+  specimen        Specimen  @relation(fields: [specimenId], references: [id], onDelete: Restrict)
+  facility        Facility  @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  receivedBy      User?     @relation(fields: [receivedById], references: [id], onDelete: Restrict)
+  results         AnalyticalResult[]
+
+  @@index([specimenId])
+  @@index([orderId])
+  @@index([patientId])
+}
+
+model SpecimenEvent {
+  id            String          @id @db.Uuid
+  facilityId    String          @db.Uuid
+  specimenId    String          @db.Uuid
+  actorId       String          @db.Uuid
+  fromStatus    SpecimenStatus?
+  toStatus      SpecimenStatus
+  action        String
+  reason        String?
+  correlationId String          @db.Uuid
+  occurredAt    DateTime        @default(now()) @db.Timestamptz(3)
+  facility      Facility        @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  specimen      Specimen        @relation(fields: [specimenId], references: [id], onDelete: Restrict)
+  actor         User            @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([facilityId, specimenId, occurredAt])
+}
+
+model PatientRevision {
+  id           String   @id @default(uuid()) @db.Uuid
+  patientId    String   @db.Uuid
+  version      Int
+  demographics Json
+  actorId      String   @db.Uuid
+  actorName    String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  actor        User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@unique([patientId, version])
+}
+
+model AuditEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  facilityId    String   @db.Uuid
+  actorId       String   @db.Uuid
+  actorName     String
+  action        String
+  entityId      String   @db.Uuid
+  version       Int
+  correlationId String   @db.Uuid
+  occurredAt    DateTime @default(now()) @db.Timestamptz(3)
+  actor         User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([facilityId, entityId, occurredAt])
+}
+
+model CommandReceipt {
+  id          String   @id @default(uuid()) @db.Uuid
+  operationId String   @db.Uuid
+  actorId     String   @db.Uuid
+  payloadHash String
+  result      Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  actor       User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@unique([actorId, operationId])
+}
+
+model AnalyticalResult {
+  id                     String @id @db.Uuid
+  facilityId             String @db.Uuid
+  patientId              String @db.Uuid
+  orderId                String @db.Uuid
+  orderItemId            String @db.Uuid
+  testId                 String @db.Uuid
+  specimenId             String @db.Uuid
+  accessionId            String @db.Uuid
+  version                Int
+  status                 ResultStatus @default(draft)
+  valueKind              ResultValueKind
+  numericInput           String?
+  numericValue           Decimal? @db.Decimal(38, 18)
+  textValue              String?
+  codedValue             String?
+  unit                   String?
+  policy                 Json
+  validation             Json
+  qc                     Json
+  readiness              String @default("pending")
+  criticalReviewRequired Boolean @default(false)
+  enteredBy              String?
+  enteredAt              DateTime? @db.Timestamptz(3)
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+  facility               Facility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  patient                Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  order                  LaboratoryOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderItem              LaboratoryOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  test                   LaboratoryTest @relation(fields: [testId], references: [id], onDelete: Restrict)
+  specimen               Specimen @relation(fields: [specimenId], references: [id], onDelete: Restrict)
+  accession              Accession @relation(fields: [accessionId], references: [id], onDelete: Restrict)
+  revisions              ResultRevision[]
+
+  @@unique([accessionId, orderItemId, testId])
+  @@index([facilityId, status, updatedAt])
+  @@index([patientId, updatedAt])
+  @@index([specimenId])
+}
+
+model ResultRevision {
+  id                 String @id @default(uuid()) @db.Uuid
+  resultId           String @db.Uuid
+  version            Int
+  previousRevisionId String? @unique @db.Uuid
+  action             String
+  actorId            String @db.Uuid
+  actorName          String
+  reason             String?
+  valueKind          ResultValueKind
+  numericValue       Decimal? @db.Decimal(38, 18)
+  snapshot           Json
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  result             AnalyticalResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  actor              User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  previousRevision   ResultRevision? @relation("ResultRevisionChain", fields: [previousRevisionId], references: [id], onDelete: Restrict)
+  nextRevision       ResultRevision? @relation("ResultRevisionChain")
+
+  @@unique([resultId, version])
+}

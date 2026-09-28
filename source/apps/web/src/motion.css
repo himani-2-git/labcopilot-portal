@@ -1,0 +1,42 @@
+/* A restrained interpretation of the supplied motion and typography reference. */
+.login-layout { width: min(1200px, 100%); grid-template-columns: minmax(0, 1.15fr) minmax(340px, .9fr); gap: 2.8rem; }
+.login-context { position: relative; isolation: isolate; max-width: none; overflow: hidden; padding: 2.5rem; border-radius: 1rem; background: #102f3a; }
+.login-context .eyebrow { color: #97d8cb; letter-spacing: .15em; font-size: .65rem; }
+.login-context h1 { color: #eef9f6; font-size: clamp(2.3rem, 4.5vw, 3.6rem); font-weight: 500; letter-spacing: -.065em; margin-block: 1.2rem; }
+.login-context > p { color: #bad1d4; font-size: .94rem; max-width: 380px; }
+.workflow-art { display: block; width: calc(100% + 5rem); height: 115px; margin: 1.5rem -2.5rem 1rem; overflow: visible; stroke: #69cbbb; stroke-width: 1; opacity: .65; }
+.workflow-art circle { fill: #94e1cd; stroke: #102f3a; stroke-width: 2; }
+.login-context .login-benefits { border-top: 1px solid #32535c; margin-top: 1.2rem; padding-top: 1.2rem; }
+.login-context .login-benefits strong { color: #e5f2ef; font-weight: 600; }
+.login-context .login-benefits small { color: #aac5ca; font-size: .72rem; line-height: 1.5; }
+.login-context .login-benefits svg { color: #7ed5c6; }
+.login-context .login-boundary { color: #b6cdc8; font-size: .66rem; line-height: 1.5; margin-top: 1.5rem; }
+.login-card { border-color: #d9e5e6; box-shadow: 0 10px 30px #163a4710; }
+.metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+.metric-card { padding: 1.1rem; background: #fff; border: 1px solid #e0e9eb; border-radius: .65rem; }
+.metric-top { display: flex; gap: .75rem; justify-content: space-between; font-size: .75rem; color: #52707b; }
+.metric-icon svg { width: 18px; height: 18px; }
+.metric-card small { color: #607d87; font-size: .7rem; }
+.metric-attention .metric-value { color: #a34439; }
+.sync-details { margin-top: .6rem; color: #57717b; font-size: .73rem; }
+.sync-details summary { cursor: pointer; }
+.sync-details dl { font-size: .7rem; }
+.sync-details dd { margin: .2rem 0 .5rem; overflow-wrap: anywhere; }
+.sync-details p { max-width: 480px; overflow-wrap: anywhere; }
+@media (max-width: 800px) {
+  .login-layout { gap: 1.5rem; grid-template-columns: 1fr 1fr; padding-inline: 1rem; }
+  .login-context { padding: 1.7rem; }
+  .login-card { padding: 1.4rem; }
+}
+@media (max-width: 640px) {
+  .login-layout { display: flex; }
+  .login-context { padding: 1.4rem; border-radius: .7rem; }
+  .login-context h1 { font-size: 2.1rem; margin-block: .7rem; }
+  .login-context > p { font-size: .8rem; line-height: 1.6; }
+  .login-context .login-boundary { margin-top: .8rem; font-size: .65rem; }
+  .workflow-art { display: none; }
+  .metrics-grid { grid-template-columns: 1fr; gap: .5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

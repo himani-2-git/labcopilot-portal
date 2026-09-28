@@ -1,0 +1,81 @@
+name: LabCopilot CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_USER: labcopilot
+          POSTGRES_PASSWORD: labcopilot-ci-only
+          POSTGRES_DB: labcopilot
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U labcopilot -d labcopilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: source
+    env:
+      NODE_ENV: development
+      AUTH_MODE: development
+      WEB_ORIGIN: http://localhost:5173
+      POSTGRES_PASSWORD: labcopilot-ci-only
+      DEMO_PASSWORD: synthetic-ci-demo-only
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Configure disposable databases
+        run: |
+          cp .env.example .env
+          printf 'DATABASE_URL=%s://labcopilot:%s@127.0.0.1:55432/labcopilot?schema=public\n' postgres "$POSTGRES_PASSWORD" >> "$GITHUB_ENV"
+          printf 'TEST_DATABASE_URL=%s://labcopilot:%s@127.0.0.1:55432/labcopilot_test?schema=public\n' postgres "$POSTGRES_PASSWORD" >> "$GITHUB_ENV"
+      - uses: pnpm/setup@v3
+        with:
+          working-directory: source
+          version: 11.19.0
+          runtime: node@24
+          cache: true
+          require-lockfile: true
+      - name: Create isolated test database
+        run: |
+          node <<'NODE'
+          const { Client } = require('pg');
+          const url = new URL(process.env.DATABASE_URL);
+          url.pathname = '/postgres';
+          const client = new Client({ connectionString: url.toString() });
+          (async () => {
+            await client.connect();
+            try { await client.query('CREATE DATABASE labcopilot_test'); }
+            finally { await client.end(); }
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          NODE
+      - name: Generate Prisma client and migrate
+        run: |
+          pnpm db:generate
+          pnpm db:migrate
+          pnpm db:seed
+      - name: Check types, build and tests
+        run: |
+          pnpm typecheck
+          pnpm build
+          pnpm test
+          pnpm check:secrets
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Exercise synthetic browser workflow
+        run: pnpm test:e2e

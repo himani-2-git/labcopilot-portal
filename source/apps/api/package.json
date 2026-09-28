@@ -1,0 +1,35 @@
+{
+  "name": "@labcopilot/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --env-file=../../.env --import tsx --watch src/main.ts",
+    "start": "node --env-file=../../.env dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:generate": "node --env-file=../../.env node_modules/prisma/build/index.js generate",
+    "db:migrate": "node --env-file=../../.env node_modules/prisma/build/index.js migrate deploy",
+    "db:seed": "node --env-file=../../.env --import tsx prisma/seed.ts",
+    "test": "pnpm build && node --env-file=../../.env node_modules/vitest/vitest.mjs run --configLoader runner"
+  },
+  "dependencies": {
+    "@labcopilot/contracts": "workspace:*",
+    "@nestjs/common": "11.1.17",
+    "@nestjs/core": "11.1.17",
+    "@nestjs/platform-express": "11.1.17",
+    "@nestjs/swagger": "11.2.3",
+    "@prisma/client": "6.19.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.1.12",
+    "express": "5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "24.10.1",
+    "prisma": "6.19.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}
